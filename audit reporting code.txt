@@ -1,0 +1,13 @@
+SELECT DISTINCT
+a.Product_Code,
+a.Sharepoint,
+a.Data_Gather,
+a.Agility,
+a.Audit_Date,
+a.Total_Score,
+a.Pass_Fail,
+b.`Data Gatherer`,
+b.`Quality Checker`
+FROM lh_sdp_hub.products_onboarding_audits_gold a
+JOIN lh_sdp_hub.agility_onboarding_task_list b on a.Product_Code = b.`Product Code`
+WHERE a.Pass_Fail = 'Fail'
