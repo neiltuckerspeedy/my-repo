@@ -6,7 +6,7 @@ WITH AttributeActions AS (
         fai.AttributeData,
         CASE
             ------------------------------------------------------------------
-            -- 4562 Width Logistics mm
+            -- 4562 Width Logistics mm under 2550mm
             ------------------------------------------------------------------
             WHEN fai.AttributeID = 4562 
                  AND (fai.AttributeData IS NULL OR LTRIM(RTRIM(fai.AttributeData)) = '')
