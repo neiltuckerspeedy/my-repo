@@ -1,0 +1,171 @@
+WITH AttributeActions AS (
+    SELECT 
+        p.ProductCode,
+        fai.ProductID,
+        fai.AttributeID,
+        fai.AttributeData,
+        CASE
+            ------------------------------------------------------------------
+            -- 4562 Width Logistics mm
+            ------------------------------------------------------------------
+            WHEN fai.AttributeID = 4562 
+                 AND (fai.AttributeData IS NULL OR LTRIM(RTRIM(fai.AttributeData)) = '')
+                THEN 'Missing'
+
+            WHEN fai.AttributeID = 4562
+                 AND TRY_CAST(LTRIM(RTRIM(fai.AttributeData)) AS INT) = 0
+                THEN 'Width can not be 0'
+
+            WHEN fai.AttributeID = 4562
+                 AND TRY_CAST(LTRIM(RTRIM(fai.AttributeData)) AS INT) > 2500
+                THEN 'Check Width'
+
+
+            ------------------------------------------------------------------
+            -- 4563 Weight Logistics kg
+            ------------------------------------------------------------------
+            WHEN fai.AttributeID = 4563 
+                 AND (fai.AttributeData IS NULL OR LTRIM(RTRIM(fai.AttributeData)) = '')
+                THEN 'Missing'
+
+            WHEN fai.AttributeID = 4563
+                 AND TRY_CAST(LTRIM(RTRIM(fai.AttributeData)) AS INT) = 0
+                THEN 'Weight can not be 0'
+
+            WHEN fai.AttributeID = 4563
+                 AND TRY_CAST(LTRIM(RTRIM(fai.AttributeData)) AS INT) > 20000
+                THEN 'Check Weight'
+
+
+            ------------------------------------------------------------------
+            -- 4561 Length Logistics mm
+            ------------------------------------------------------------------
+            WHEN fai.AttributeID = 4561 
+                 AND (fai.AttributeData IS NULL OR LTRIM(RTRIM(fai.AttributeData)) = '')
+                THEN 'Missing'
+
+            WHEN fai.AttributeID = 4561
+                 AND TRY_CAST(LTRIM(RTRIM(fai.AttributeData)) AS INT) < 1
+                THEN 'Length can not be 0'
+
+            WHEN fai.AttributeID = 4561
+                 AND TRY_CAST(LTRIM(RTRIM(fai.AttributeData)) AS INT) > 10000
+                THEN 'Check Length'
+
+
+            ------------------------------------------------------------------
+            -- 4560 Height Logistics mm
+            ------------------------------------------------------------------
+            WHEN fai.AttributeID = 4560 
+                 AND (fai.AttributeData IS NULL OR LTRIM(RTRIM(fai.AttributeData)) = '')
+                THEN 'Missing'
+
+            WHEN fai.AttributeID = 4560
+                 AND TRY_CAST(LTRIM(RTRIM(fai.AttributeData)) AS INT) = 0
+                THEN 'Height can not be 0'
+
+            WHEN fai.AttributeID = 4560
+                 AND TRY_CAST(LTRIM(RTRIM(fai.AttributeData)) AS INT) > 3000
+                THEN 'Check Height'
+
+
+            ------------------------------------------------------------------
+            -- 4459 COO Country
+            ------------------------------------------------------------------
+            WHEN fai.AttributeID = 4459
+                 AND (fai.AttributeData IS NULL OR fai.AttributeData = '')
+                 AND EXISTS (
+                        SELECT 1
+                        FROM agility_fact_attribute_instance f2
+                        WHERE f2.ProductID = fai.ProductID
+                          AND f2.AttributeID = 4458
+                          AND LEN(f2.AttributeData) = 2
+                 )
+                THEN 'Country Code Known'
+
+            WHEN fai.AttributeID = 4459
+                 AND (fai.AttributeData IS NULL OR fai.AttributeData = '')
+                THEN 'Missing'
+
+
+            ------------------------------------------------------------------
+            -- 4458 COO Alpha
+            ------------------------------------------------------------------
+            WHEN fai.AttributeID = 4458
+                 AND (fai.AttributeData IS NULL OR fai.AttributeData = '')
+                 AND EXISTS (
+                        SELECT 1
+                        FROM agility_fact_attribute_instance f2
+                        WHERE f2.ProductID = fai.ProductID
+                          AND f2.AttributeID = 4459
+                          AND LEN(f2.AttributeData) > 0
+                 )
+                THEN 'Origin Country Known'
+
+            WHEN fai.AttributeID = 4458
+                 AND (fai.AttributeData IS NULL OR fai.AttributeData = '')
+                THEN 'Missing'
+
+            WHEN fai.AttributeID = 4458
+                 AND LEN(fai.AttributeData) > 2
+                THEN 'Code longer than 2 characters'
+
+
+            ------------------------------------------------------------------
+            -- 4450 Commodity Code
+            ------------------------------------------------------------------
+            WHEN fai.AttributeID = 4450
+                 AND (fai.AttributeData IS NULL OR fai.AttributeData = '')
+                THEN 'Missing'
+
+            WHEN fai.AttributeID = 4450
+                 AND LEN(fai.AttributeData) < 6
+                THEN 'Commodity Code too short'
+
+            WHEN fai.AttributeID = 4450
+                 AND LEN(fai.AttributeData) > 10
+                THEN 'Commodity Code too long'
+
+
+            ------------------------------------------------------------------
+            ELSE 'No Action'
+        END AS Action
+    FROM agility_fact_attribute_instance fai
+    JOIN agility_dim_product p
+      ON fai.ProductID = p.ProductID
+),
+FilteredProducts AS (
+    SELECT 
+        p.ProductID,
+        p.ProductCode,
+        p.ProductName
+    FROM agility_dim_product p
+    JOIN agility_fact_hierarchy h 
+      ON p.ProductID = h.product_id
+    WHERE h.L1_id = '302414'
+      AND h.L2_id NOT LIKE '302419'
+),
+ProductStatus AS (
+    SELECT
+        ProductCode,
+        CASE 
+            WHEN SUM(CASE WHEN Action NOT IN ('Missing', 'No Action') THEN 1 END) > 0
+                THEN 'Failed'
+            ELSE 'Passed'
+        END AS ValidationStatus
+    FROM AttributeActions
+    GROUP BY ProductCode
+)
+SELECT
+    att.AttributeName,
+    aa.Action,
+    COUNT(*) AS Count
+FROM AttributeActions aa
+JOIN FilteredProducts fp
+  ON aa.ProductID = fp.ProductID
+JOIN ProductStatus ps
+  ON aa.ProductCode = ps.ProductCode
+JOIN agility_dim_attribute att
+  ON aa.AttributeID = att.AttributeID
+WHERE aa.Action NOT IN ('Missing','No Action')
+GROUP BY att.AttributeName, aa.Action;
